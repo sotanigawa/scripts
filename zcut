@@ -1,0 +1,48 @@
+#!/bin/sh
+# zcut - extract a page range from the PDF you are viewing in zathura
+#
+# Add these lines to ~/.config/zathura/zathurarc:
+#
+#   map <A-1> exec "zcut start $FILE $PAGE"
+#   map <A-2> exec "zcut end $FILE $PAGE"
+#
+# Then in zathura:
+#   Alt+1  mark the current page as the start
+#   Alt+2  mark the current page as the end and extract the range
+# Output: <name>_p<start>-<end>.pdf next to the original.
+#
+# Requires: pdftk, notify-send (libnotify)
+
+state="${XDG_RUNTIME_DIR:-/tmp}/zcut-start"
+file="$2"
+page="$3"
+
+case "$1" in
+  start)
+    echo "$page" > "$state"
+    notify-send "zcut" "Start page: $page"
+    ;;
+  end)
+    if [ ! -f "$state" ]; then
+      notify-send "zcut" "Set a start page first"
+      exit 1
+    fi
+    s=$(cat "$state")
+    e="$page"
+    # Allow marking the range in reverse order
+    if [ "$s" -gt "$e" ]; then
+      t=$s; s=$e; e=$t
+    fi
+    out="${file%.pdf}_p${s}-${e}.pdf"
+    if pdftk "$file" cat "$s-$e" output "$out"; then
+      notify-send "zcut" "Saved: $out"
+    else
+      notify-send "zcut" "Failed to extract pages $s-$e"
+    fi
+    rm -f "$state"
+    ;;
+  *)
+    echo "Usage: zcut start|end FILE PAGE" >&2
+    exit 1
+    ;;
+esac

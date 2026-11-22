@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+# drag - drag and drop files from the terminal into any GUI app
+#
+# Usage:
+#   drag FILE...
+#
+# A small always-on-top window with a button appears. Drag the button
+# onto a browser, file manager, chat app, etc. to drop the file(s).
+#   - The window closes automatically after a successful drop
+#   - Press Esc or close the window to cancel
+#
+# Examples:
+#   drag report.pdf
+#   drag *.png
+#
+# Requires: Python 3, PyGObject, GTK 3
+
+import os
+import sys
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gtk, Gdk, Gio
+
+paths = [os.path.abspath(p) for p in sys.argv[1:]]
+if not paths:
+    sys.exit("Usage: drag FILE...")
+
+uris = [Gio.File.new_for_path(p).get_uri() for p in paths]
+dropped = False
+
+
+def on_get(widget, ctx, data, info, time):
+    global dropped
+    data.set_uris(uris)
+    dropped = True
+
+
+def on_end(widget, ctx):
+    # Keep the window open if the drag was cancelled, so it can be retried
+    if dropped:
+        Gtk.main_quit()
+
+
+def on_key(widget, event):
+    if event.keyval == Gdk.KEY_Escape:
+        Gtk.main_quit()
+
+
+win = Gtk.Window(title="drag")
+win.set_keep_above(True)
+win.connect("destroy", Gtk.main_quit)
+win.connect("key-press-event", on_key)
+
+label = os.path.basename(paths[0]) if len(paths) == 1 else f"{len(paths)} files"
+btn = Gtk.Button(label=label)
+btn.set_size_request(200, 60)
+btn.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [], Gdk.DragAction.COPY)
+btn.drag_source_add_uri_targets()
+btn.connect("drag-data-get", on_get)
+btn.connect("drag-end", on_end)
+
+win.add(btn)
+win.show_all()
+Gtk.main()
